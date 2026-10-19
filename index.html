@@ -3340,13 +3340,12 @@ function cloudDownload(){
  var t=ghTok();
  if(!t){alert('اول توکن را ذخیره کنید');return}
  toast('در حال دریافت…');
- fetch(GH_DATA,{headers:{'Authorization':'token '+t,'Accept':'application/vnd.github+json','User-Agent':'aria-melk'}})
+ fetch(GH_DATA,{headers:{'Authorization':'token '+t,'Accept':'application/vnd.github.raw','User-Agent':'aria-melk'}})
  .then(function(r){
   if(!r.ok)throw new Error('در ابر چیزی نیست (اول از دستگاه دیگر بارگذاری کن)');
-  return r.json();
+  return r.text();
  })
- .then(function(j){
-  var txt=decodeURIComponent(escape(atob(String(j.content).replace(/\n/g,''))));
+ .then(function(txt){
   var d=JSON.parse(txt);
   if(!d||!Array.isArray(d.props))throw new Error('فایل ابر معتبر نیست');
   var ok=confirm('دریافت انجام شد.\n\nتایید = ادغام با اطلاعات همین دستگاه (هیچ چیزی حذف نمی‌شود)\nانصراف = جایگزینی کامل اطلاعات این دستگاه با ابر');
