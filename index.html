@@ -3238,6 +3238,14 @@ function clearStrayDraft(){
 }
 function renderExport(){
  var h='<div class="pagehead"><h2>💾 خروجی و بکاپ</h2></div>';
+ h+='<div class="cardx"><h3>☁ همگام‌سازی گوشی و لپ‌تاپ</h3>';
+ h+='<p class="mut">داده‌ها در مخزن خصوصی خودت (aria-melk-data) ذخیره می‌شود؛ فقط خودت به آن دسترسی داری. توکن یک بار در هر دستگاه وارد می‌شود و همان‌جا می‌ماند.</p>';
+ h+='<div class="field"><label>توکن GitHub (ghp_...)</label><input id="gh_tok" type="password" dir="ltr" value="'+esc(ghTok())+'"></div>';
+ h+='<div class="btnrow">';
+ h+='<button class="btn ghost" onclick="ghSaveTok()">🔑 ذخیره توکن</button>';
+ h+='<button class="btn gold" onclick="cloudUpload()">⬆ بارگذاری به ابر</button>';
+ h+='<button class="btn" onclick="cloudDownload()">⬇ دریافت از ابر</button>';
+ h+='</div><div class="mut" id="gh_info" style="font-size:12px"></div></div>';
  h+='<div class="cardx"><h3>خروجی CSV</h3><p class="mut">با BOM ساخته می‌شود؛ فارسی در اکسل درست نمایش داده می‌شود.</p><div class="btnrow">';
  h+='<button class="btn" onclick="exportProps()">🏠 CSV فایل‌ها</button>';
  h+='<button class="btn" onclick="exportCusts()">👤 CSV مشتری‌ها</button>';
@@ -3265,7 +3273,7 @@ function renderExport(){
  h+=' — یادداشت‌ها: '+faNum(store.prios.length);
  h+=' — بازدیدها: '+faNum(store.visits.length);
  h+=' — محتواها: '+faNum(store.content.length);
- h+='<br>📍 محل ذخیره: مرورگر همین دستگاه (کلید tikabi_v8) — نسخه ۱٫۱</div>';
+ h+='<br>📍 محل ذخیره: مرورگر همین دستگاه (کلید tikabi_v8) — نسخه ۱٫۲</div>';
  document.getElementById('app').innerHTML=h;
 }
 try{
@@ -3283,6 +3291,97 @@ try{
  showFatal('خطا در راه‌اندازی: '+(e&&e.message?e.message:e));
 }
 window.__ok.s9=true;
+</script>
+
+<script>
+/* قطعه ۱۲: همگام‌سازی ابری */
+"use strict";
+var GH_DATA='https://api.github.com/repos/aryamelk/aria-melk-data/contents/data.json';
+function ghTok(){
+ try{return localStorage.getItem('aria_gh_token')||''}catch(e){return ''}
+}
+function ghSaveTok(){
+ var t=document.getElementById('gh_tok');
+ var v=t?t.value.trim():'';
+ if(!v){alert('توکن را وارد کنید');return}
+ try{localStorage.setItem('aria_gh_token',v)}catch(e){}
+ toast('توکن ذخیره شد ✅');
+ ghSyncInfo();
+}
+function ghSyncInfo(){
+ var el=document.getElementById('gh_info');
+ if(el)el.textContent=ghTok()?'✅ توکن ذخیره شده — آماده همگام‌سازی':'❌ توکن ذخیره نشده است';
+}
+setTimeout(ghSyncInfo,100);
+function cloudUpload(){
+ var t=ghTok();
+ if(!t){alert('اول توکن را ذخیره کنید');return}
+ if(!confirm('اطلاعات همین دستگاه به ابر بارگذاری شود؟ (اطلاعات قبلی ابر جایگزین می‌شود)'))return;
+ toast('در حال بارگذاری…');
+ fetch(GH_DATA,{headers:{'Authorization':'token '+t,'Accept':'application/vnd.github+json','User-Agent':'aria-melk'}})
+ .then(function(r){return r.status===200?r.json():null})
+ .then(function(j){
+  var payload={
+   message:'sync '+todayEN()+' '+nowClock(),
+   content:btoa(unescape(encodeURIComponent(JSON.stringify(store))))
+  };
+  if(j&&j.sha)payload.sha=j.sha;
+  return fetch(GH_DATA,{method:'PUT',
+   headers:{'Authorization':'token '+t,'Accept':'application/vnd.github+json','Content-Type':'application/json','User-Agent':'aria-melk'},
+   body:JSON.stringify(payload)});
+ })
+ .then(function(r){
+  if(r.ok)toast('✅ اطلاعات به ابر بارگذاری شد');
+  else r.text().then(function(){alert('بارگذاری نشد (کد '+r.status+') — توکن را چک کن')});
+ })
+ .catch(function(e){alert('خطای شبکه: '+e)});
+}
+function cloudDownload(){
+ var t=ghTok();
+ if(!t){alert('اول توکن را ذخیره کنید');return}
+ toast('در حال دریافت…');
+ fetch(GH_DATA,{headers:{'Authorization':'token '+t,'Accept':'application/vnd.github+json','User-Agent':'aria-melk'}})
+ .then(function(r){
+  if(!r.ok)throw new Error('در ابر چیزی نیست (اول از دستگاه دیگر بارگذاری کن)');
+  return r.json();
+ })
+ .then(function(j){
+  var txt=decodeURIComponent(escape(atob(String(j.content).replace(/\n/g,''))));
+  var d=JSON.parse(txt);
+  if(!d||!Array.isArray(d.props))throw new Error('فایل ابر معتبر نیست');
+  var ok=confirm('دریافت انجام شد.\n\nتایید = ادغام با اطلاعات همین دستگاه (هیچ چیزی حذف نمی‌شود)\nانصراف = جایگزینی کامل اطلاعات این دستگاه با ابر');
+  if(ok){
+   var added=0,updated=0;
+   var keys=['props','custs','follows','contracts','prios','visits','content'];
+   keys.forEach(function(k){
+    var inc=(d[k]&&Array.isArray(d[k]))?d[k]:[];
+    if(!Array.isArray(store[k]))store[k]=[];
+    inc.forEach(function(r2){
+     if(!r2||!r2.id)return;
+     var i=store[k].findIndex(function(x){return x.id===r2.id});
+     if(i<0){store[k].push(r2);added++}
+     else{
+      var cur=store[k][i];
+      var nt=+r2.editedTs||+r2.createdTs||0;
+      var ct=+cur.editedTs||+cur.createdTs||0;
+      if(nt>ct){store[k][i]=r2;updated++}
+     }
+    });
+   });
+   if(d.seq>store.seq)store.seq=d.seq;
+   save();
+   renderAll();
+   toast('✅ ادغام شد — جدید: '+faNum(added)+' | به‌روزرسانی: '+faNum(updated));
+  }else{
+   store=JSON.parse(JSON.stringify(d));
+   loadStore();
+   save();
+   renderAll();
+   toast('✅ جایگزینی کامل انجام شد');
+  }
+ })
+ .catch(function(e){alert('دریافت نشد: '+e.message)});
+}
 </script>
 </body>
 </html>
